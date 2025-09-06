@@ -12,7 +12,7 @@ if "%~2" == "" (
   exit /b 1
 )
 
-node update_version.js %1 %2
+node %~dp0update_version.js %1 %2
 
 if %ERRORLEVEL% EQU 0 (
   echo 版本更新成功!
