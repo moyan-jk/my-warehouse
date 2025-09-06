@@ -201,6 +201,8 @@ function validateForm(form, rules) {
                 errors.push(`${fieldRules.label || fieldName}不能小于${fieldRules.min}`);
             } else if (fieldRules.max !== undefined && numValue > fieldRules.max) {
                 errors.push(`${fieldRules.label || fieldName}不能大于${fieldRules.max}`);
+            } else if (fieldRules.allowNegative !== true && numValue < 0) {
+                errors.push(`${fieldRules.label || fieldName}不能为负数`);
             }
         }
         
@@ -213,6 +215,8 @@ function validateForm(form, rules) {
                 errors.push(`${fieldRules.label || fieldName}不能小于${fieldRules.min}`);
             } else if (fieldRules.max !== undefined && intValue > fieldRules.max) {
                 errors.push(`${fieldRules.label || fieldName}不能大于${fieldRules.max}`);
+            } else if (fieldRules.allowNegative !== true && intValue < 0) {
+                errors.push(`${fieldRules.label || fieldName}不能为负数`);
             }
         }
         
@@ -252,13 +256,13 @@ function calculateMonthlyPayment(principal, rate, terms) {
     
     // 如果没有利率，简单平均分期
     if (!rate || rate <= 0) {
-        return principal / terms;
+        return parseFloat((principal / terms).toFixed(2));
     }
     
     // 等额本息计算公式
     const monthlyRate = rate / 100 / 12;
     const payment = principal * monthlyRate * Math.pow(1 + monthlyRate, terms) / (Math.pow(1 + monthlyRate, terms) - 1);
-    return payment;
+    return parseFloat(payment.toFixed(2)); // 四舍五入到分
 }
 
 // 辅助函数：检查是否为今天或未来几天内的日期
@@ -291,7 +295,8 @@ function addNextMonthLoan(platform, amount, borrowDate, repayDate, rate, minRate
         throw new Error('借款平台不能为空');
     }
     
-    const amountValue = parseFloat(amount);
+    // 确保金额精确到分
+const amountValue = parseFloat(Math.abs(parseFloat(amount)).toFixed(2));
     if (isNaN(amountValue) || amountValue <= 0) {
         throw new Error('借款金额必须是大于0的数字');
     }
@@ -304,13 +309,15 @@ function addNextMonthLoan(platform, amount, borrowDate, repayDate, rate, minRate
         throw new Error('还款日期无效');
     }
     
-    const rateValue = parseFloat(rate);
+    // 确保利率精确到万分之四
+const rateValue = parseFloat(Math.abs(parseFloat(rate)).toFixed(4));
     if (isNaN(rateValue) || rateValue < 0 || rateValue > 100) {
         throw new Error('年利率必须是0-100之间的数字');
     }
     
-    const minRateValue = parseFloat(minRate);
-    if (isNaN(minRateValue) || minRateValue < 5 || minRateValue > 30) {
+    // 确保最低还款比例精确到万分之四（将百分比转换为小数）
+const minRateValue = parseFloat(Math.abs(parseFloat(minRate) / 100).toFixed(4));
+    if (isNaN(minRateValue) || minRateValue < 0.05 || minRateValue > 0.3) {
         throw new Error('最低还款比例必须是5-30之间的数字');
     }
     
@@ -342,9 +349,9 @@ function editNextMonthLoan(id, updates) {
         debtData.nextMonthLoans[loanIndex] = {
             ...debtData.nextMonthLoans[loanIndex],
             ...updates,
-            amount: updates.amount ? parseFloat(updates.amount) : debtData.nextMonthLoans[loanIndex].amount,
-            rate: updates.rate ? parseFloat(updates.rate) : debtData.nextMonthLoans[loanIndex].rate,
-            minPaymentRate: updates.minPaymentRate ? parseFloat(updates.minPaymentRate) : debtData.nextMonthLoans[loanIndex].minPaymentRate
+            amount: updates.amount ? parseFloat(Math.abs(parseFloat(updates.amount)).toFixed(2)) : debtData.nextMonthLoans[loanIndex].amount,
+            rate: updates.rate ? parseFloat(Math.abs(parseFloat(updates.rate)).toFixed(4)) : debtData.nextMonthLoans[loanIndex].rate,
+            minPaymentRate: updates.minPaymentRate ? parseFloat(Math.abs(parseFloat(updates.minPaymentRate) / 100).toFixed(4)) : debtData.nextMonthLoans[loanIndex].minPaymentRate
         };
         saveData(debtData);
         renderNextMonthLoans();
@@ -410,7 +417,7 @@ function processMinimumPayment(id, amount) {
             const rate = loan.rate || 0;
             if (rate > 0 && days > 0) {
                 const interest = calculateInterest(remainingAmount, rate / 100, days);
-                loan.amount += interest;
+                loan.amount = parseFloat((loan.amount + interest).toFixed(2)); // 确保金额精确到分
                 console.log(`计算利息: ${interest}, 剩余本金: ${remainingAmount}, 天数: ${days}, 利率: ${rate}%`);
             }
             loan.lastPaymentDate = new Date().toISOString();
@@ -448,7 +455,7 @@ function processMinimumPayment(id, amount) {
         // 计算利息天数（假设30天）
         const rate = loan.rate || 18; // 使用贷款特定的利率，如果没有则使用18%
         const interest = calculateInterest(remainingAmount, rate / 100, 30);
-        const newAmount = parseFloat((remainingAmount + interest).toFixed(2));
+        const newAmount = parseFloat((remainingAmount + interest).toFixed(2)); // 确保新借款金额精确到分
         
         // 创建新的借款记录
         const newLoan = {
@@ -478,7 +485,8 @@ let paymentRecordsExpanded = false;
 
 // 设置最低还款比例
 function setMinPaymentRate(rate) {
-    if (rate < 0.05 || rate > 0.3) {
+    rate = Math.abs(parseFloat(rate));
+    if (isNaN(rate) || rate < 0.05 || rate > 0.3) {
         alert('最低还款比例必须在5%-30%之间');
         return false;
     }
@@ -498,7 +506,7 @@ function getMinimumPayment(amount) {
 function calculateInterest(principal, rate, days) {
     // 简单利息计算: 本金 * 日利率 * 天数
     const dailyRate = rate / 365;
-    return parseFloat((principal * dailyRate * days).toFixed(2));
+    return parseFloat((principal * dailyRate * days).toFixed(2)); // 确保利息精确到分
 }
 
 // 添加还款记录
@@ -600,7 +608,7 @@ function renderPaymentRecords() {
     if (records.length > 3) {
         html += `
             <tr class="text-center bg-gray-50">
-                <td colspan="6" class="px-6 py-3">
+                <td colspan="7" class="px-6 py-3">
                     <button onclick="togglePaymentRecords()" class="text-primary hover:text-primary/80 font-medium">
                         ${paymentRecordsExpanded ? '收起' : `显示更多 (${records.length - 3})`}
                     </button>
@@ -725,7 +733,7 @@ function renderNextMonthLoans() {
     if (loans.length > 10) {
         html += `
             <tr class="text-center bg-gray-50">
-                <td colspan="6" class="px-6 py-3">
+                <td colspan="7" class="px-6 py-3">
                     <button onclick="toggleNextMonthList()" class="text-primary hover:text-primary/80 font-medium">
                         ${nextMonthListExpanded ? '收起' : `显示更多 (${loans.length - 10})`}
                     </button>
@@ -741,10 +749,17 @@ function renderNextMonthLoans() {
 
 // 添加分期还款
 function addInstallmentLoan(platform, amount, terms, rate, monthlyPayment, borrowDate, nextRepayDate, remarks = '') {
-    const principal = parseFloat(amount);
-    const termCount = parseInt(terms);
-    const rateValue = parseFloat(rate) || 0;
-    const payment = parseFloat(monthlyPayment) || calculateMonthlyPayment(principal, rateValue, termCount);
+    // 确保本金精确到分
+const principal = parseFloat(Math.abs(parseFloat(amount)).toFixed(2));
+    const termCount = Math.abs(parseInt(terms));
+    const rateValue = Math.abs(parseFloat(rate)) || 0;
+    // 确保每月还款额精确到分
+const payment = parseFloat((Math.abs(parseFloat(monthlyPayment)) || calculateMonthlyPayment(principal, rateValue, termCount)).toFixed(2));
+    
+    // 验证期数
+    if (isNaN(termCount) || termCount <= 0) {
+        throw new Error('分期期数必须是大于0的整数');
+    }
     
     // 初始化分期数组
     const installments = [];
@@ -814,10 +829,10 @@ function editInstallmentLoan(id, updates) {
         const updatedLoan = {
             ...currentLoan,
             ...updates,
-            amount: updates.amount ? parseFloat(updates.amount) : currentLoan.amount,
-            terms: updates.terms ? parseInt(updates.terms) : currentLoan.terms,
-            rate: updates.rate ? parseFloat(updates.rate) : currentLoan.rate,
-            monthlyPayment: updates.monthlyPayment ? parseFloat(updates.monthlyPayment) : currentLoan.monthlyPayment
+            amount: updates.amount ? parseFloat(Math.abs(parseFloat(updates.amount)).toFixed(2)) : currentLoan.amount,
+            terms: updates.terms ? Math.abs(parseInt(updates.terms)) : currentLoan.terms,
+            rate: updates.rate ? Math.abs(parseFloat(updates.rate)) : currentLoan.rate,
+            monthlyPayment: updates.monthlyPayment ? parseFloat(Math.abs(parseFloat(updates.monthlyPayment)).toFixed(2)) : currentLoan.monthlyPayment
         };
         
         // 如果修改了影响分期的参数，重新计算分期
@@ -976,10 +991,6 @@ function renderInstallmentLoans() {
                     <div class="text-xs text-gray-500">剩余还款</div>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
-                    <div class="text-sm font-medium text-warning">¥${formatAmount(getInstallmentRemainingAmount(loan))}</div>
-                    <div class="text-xs text-gray-500">剩余还款</div>
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap">
                     <div class="text-sm text-gray-900">¥${formatAmount(loan.monthlyPayment)}</div>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
@@ -1007,7 +1018,7 @@ function renderInstallmentLoans() {
     if (loans.length > 10) {
         html += `
             <tr class="text-center bg-gray-50">
-                <td colspan="6" class="px-6 py-3">
+                <td colspan="7" class="px-6 py-3">
                     <button onclick="toggleInstallmentList()" class="text-primary hover:text-primary/80 font-medium">
                         ${installmentListExpanded ? '收起' : `显示更多 (${loans.length - 10})`}
                     </button>
@@ -1733,7 +1744,7 @@ function showMinimumPaymentModal(id) {
             </div>
             <div>
                 <label for="minimumAmount" class="block text-sm font-medium text-gray-700 mb-1">最低还款金额 (¥)</label>
-                <input type="number" id="minimumAmount" name="minimumAmount" step="0.01" min="0.01" max="${loan.amount}" value="${(loan.amount * 0.1).toFixed(2)}" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-warning focus:border-transparent">
+                <input type="number" id="minimumAmount" name="minimumAmount" step="0.01" min="0.01" max="${loan.amount}" value="${(loan.amount * (loan.minPaymentRate || debtData.minPaymentRate)).toFixed(2)}" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-warning focus:border-transparent">
                 <p class="mt-1 text-xs text-gray-500">最低还款后，剩余金额将自动计算利息并转入下期账单</p>
             </div>
         </form>
