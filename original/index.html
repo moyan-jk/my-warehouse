@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<!-- 页面更新时间戳: 1757095020000 -->
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>个人债务管理系统</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome from CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <!-- Chart.js -->
+    <script src="vendor/js/chart.umd.min.js"></script>
+    <!-- App JavaScript -->
+    <script src="app.js"></script>
+    
+    <!-- Tailwind 配置 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#6366F1',
+                        success: '#10B981',
+                        warning: '#F59E0B',
+                        danger: '#EF4444',
+                        info: '#64748B',
+                        light: '#F3F4F6',
+                        dark: '#1F2937'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .card-shadow {
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            }
+            .transition-custom {
+                transition: all 0.3s ease;
+            }
+        }
+
+        /* 全局样式 */
+        :root {
+            --primary: #1e40af;
+            --primary-dark: #1e3a8a;
+            --secondary: #3b82f6;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --success: #10b981;
+            --light: #f3f4f6;
+            --dark: #1f2937;
+            --gray: #6b7280;
+            --gray-light: #e5e7eb;
+            --border: #d1d5db;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        /* 浅色主题 */
+        .light-theme {
+            --bg-color: #ffffff;
+            --text-color: #111827;
+            --card-bg: #ffffff;
+            --card-border: #e5e7eb;
+        }
+
+        /* 深色主题 */
+        .dark-theme {
+            --bg-color: #111827;
+            --text-color: #f3f4f6;
+            --card-bg: #1f2937;
+            --card-border: #374151;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border-color: var(--card-border);
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans text-gray-800 min-h-screen">
+    <!-- 顶部导航栏 -->
+    <header class="bg-white shadow-md sticky top-0 z-50">
+        <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-primary flex items-center">
+                <i class="fa fa-money mr-2" aria-hidden="true"></i>
+                个人债务管理系统
+            </h1>
+            <div class="flex space-x-4">
+                <button id="settingsBtn" class="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-custom flex items-center">
+                    <i class="fa fa-sliders mr-2" aria-hidden="true"></i>系统设置
+                </button>
+                <button id="platformManagerBtn" class="px-4 py-2 bg-info text-white rounded-md hover:bg-info/90 transition-custom flex items-center">
+                    <i class="fa fa-cogs mr-2" aria-hidden="true"></i>平台管理
+                </button>
+                <button id="exportBtn" class="px-4 py-2 bg-success text-white rounded-md hover:bg-success/90 transition-custom flex items-center">
+                    <i class="fa fa-download mr-2" aria-hidden="true"></i>导出数据
+                </button>
+                <button id="importBtn" class="px-4 py-2 bg-secondary text-white rounded-md hover:bg-secondary/90 transition-custom flex items-center">
+                    <i class="fa fa-upload mr-2" aria-hidden="true"></i>导入数据
+                </button>
+                <button id="resetBtn" class="px-4 py-2 bg-danger text-white rounded-md hover:bg-danger/90 transition-custom flex items-center">
+                    <i class="fa fa-refresh mr-2" aria-hidden="true"></i>重置数据
+                </button>
+            </div>
+        </div>
+        
+        <!-- 总负债汇总栏 -->
+        <div id="summaryBar" class="bg-gray-100 border-t border-gray-200 py-3 px-4">
+            <div class="container mx-auto flex flex-wrap justify-between items-center">
+                <div class="flex space-x-6 mb-2 md:mb-0">
+                    <div class="flex items-center">
+                        <span class="text-gray-600 mr-2">本月借下月还款总计：</span>
+                        <span id="nextMonthTotal" class="text-lg font-semibold text-primary">¥0.00</span>
+                    </div>
+                    <div class="flex items-center">
+                        <span class="text-gray-600 mr-2">分期还款总计：</span>
+                        <span id="installmentTotal" class="text-lg font-semibold text-secondary">¥0.00</span>
+                    </div>
+                </div>
+                <div class="flex items-center">
+                    <span class="text-gray-600 mr-2">总负债：</span>
+                    <span id="grandTotal" class="text-xl font-bold text-danger">¥0.00</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主要内容区 -->
+    <main class="container mx-auto px-4 py-8">
+        <!-- 提醒横幅 -->
+        <div id="reminderBanner" class="mb-6 p-4 rounded-lg bg-warning/10 border border-warning/30 hidden">
+            <div class="flex items-center">
+                <i class="fa fa-bell text-warning text-xl mr-3" aria-hidden="true"></i>
+                <p id="reminderText" class="text-warning"></p>
+                <button id="closeReminder" class="ml-auto text-warning hover:text-warning/70">
+                    <i class="fa fa-times" aria-hidden="true"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- 两个主要板块 -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- 板块一：本月借下月还款账单 -->
+            <section id="nextMonthSection" class="bg-white rounded-xl shadow-lg overflow-hidden card-shadow">
+                <div class="p-6">
+                    <h2 class="text-xl font-bold mb-4 text-primary flex items-center">
+                        <i class="fa fa-calendar-check-o mr-2" aria-hidden="true"></i>
+                        本月借下月还款账单
+                    </h2>
+                    
+                    <!-- 输入表单 -->
+                    <div class="mb-6 p-4 bg-gray-50 rounded-lg">
+                        <h3 class="text-lg font-semibold mb-3">添加借款</h3>
+                        <form id="nextMonthForm" class="space-y-4">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="nextMonthPlatform" class="block text-sm font-medium text-gray-700 mb-1">借款平台</label>
+                                    <select id="nextMonthPlatform" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="nextMonthAmount" class="block text-sm font-medium text-gray-700 mb-1">借款金额 (¥)</label>
+                                    <input type="number" id="nextMonthAmount" step="0.01" min="0.01" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="请输入金额">
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="nextMonthRate" class="block text-sm font-medium text-gray-700 mb-1">年利率 (%)</label>
+                                    <input type="number" id="nextMonthRate" step="0.01" min="0" max="100" value="0" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="请输入年利率">
+                                </div>
+
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="nextMonthBorrowDate" class="block text-sm font-medium text-gray-700 mb-1">借款日期</label>
+                                    <input type="date" id="nextMonthBorrowDate" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
+                                </div>
+                                <div>
+                                    <label for="nextMonthRepayDate" class="block text-sm font-medium text-gray-700 mb-1">还款日期</label>
+                                    <input type="date" id="nextMonthRepayDate" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
+                                </div>
+                            </div>
+                            <div>
+                                <label for="nextMonthRemarks" class="block text-sm font-medium text-gray-700 mb-1">备注 (可选)</label>
+                                <input type="text" id="nextMonthRemarks" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="添加备注信息">
+                            </div>
+                            <button type="submit" class="w-full bg-primary text-white font-medium py-2 px-4 rounded-md hover:bg-primary/90 transition-custom">
+                                <i class="fa fa-plus mr-1" aria-hidden="true"></i> 添加借款
+                            </button>
+                        </form>
+                    </div>
+                    
+                    <!-- 汇总信息 -->
+                    <div class="mb-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div class="bg-blue-50 p-4 rounded-lg">
+                            <h3 class="text-sm font-medium text-gray-600 mb-1">总借款额</h3>
+                            <p id="nextMonthTotalAmount" class="text-xl font-bold text-primary">¥0.00</p>
+                        </div>
+                        <div class="bg-green-50 p-4 rounded-lg">
+                            <h3 class="text-sm font-medium text-gray-600 mb-1">已还款</h3>
+                            <p id="nextMonthPaidAmount" class="text-xl font-bold text-success">¥0.00</p>
+                        </div>
+                        <div class="bg-yellow-50 p-4 rounded-lg">
+                            <h3 class="text-sm font-medium text-gray-600 mb-1">待还款</h3>
+                            <p id="nextMonthRemainingAmount" class="text-xl font-bold text-warning">¥0.00</p>
+                        </div>
+                    </div>
+                    
+                    <!-- 借款列表 -->
+                    <div>
+                        <div class="flex justify-between items-center mb-3">
+                            <h3 class="text-lg font-semibold">借款列表</h3>
+                            <div class="flex space-x-2">
+                                <select id="nextMonthSort" class="px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none">
+                                    <option value="date">按日期排序</option>
+                                    <option value="platform">按平台排序</option>
+                                    <option value="amount">按金额排序</option>
+                                    <option value="status">按状态排序</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">平台</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">借款金额</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">借款日期</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">还款日期</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">状态</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">最低还款比例</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="nextMonthList" class="bg-white divide-y divide-gray-200">
+                                    <!-- 借款记录将通过JavaScript动态添加 -->
+                                    <tr class="text-center">
+                                        <td colspan="6" class="px-6 py-10 text-gray-500">暂无借款记录</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- 板块二：分期还款账单 -->
+            <section id="installmentSection" class="bg-white rounded-xl shadow-lg overflow-hidden card-shadow">
+                <div class="p-6">
+                    <h2 class="text-xl font-bold mb-4 text-secondary flex items-center">
+                        <i class="fa fa-sitemap mr-2" aria-hidden="true"></i>
+                        分期还款账单
+                    </h2>
+                    
+                    <!-- 输入表单 -->
+                    <div class="mb-6 p-4 bg-gray-50 rounded-lg">
+                        <h3 class="text-lg font-semibold mb-3">添加分期借款</h3>
+                        <form id="installmentForm" class="space-y-4">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="installmentPlatform" class="block text-sm font-medium text-gray-700 mb-1">借款平台</label>
+                                    <select id="installmentPlatform" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-secondary focus:border-transparent">
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="installmentAmount" class="block text-sm font-medium text-gray-700 mb-1">借款金额 (¥)</label>
+                                    <input type="number" id="installmentAmount" step="0.01" min="0.01" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-secondary focus:border-transparent" placeholder="请输入金额">
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                    <label for="installmentTerm" class="block text-sm font-medium text-gray-700 mb-1">分期数</label>
+                                    <input type="number" id="installmentTerm" min="1" max="24" value="12" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-secondary focus:border-transparent">
+                                </div>
+                                <div>
+                                    <label for="installmentRate" class="block text-sm font-medium text-gray-700 mb-1">年利率 (%)</label>
+                                    <input type="number" id="installmentRate" step="0.01" min="0" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-secondary focus:border-transparent" placeholder="0.00">
+                                </div>
+                                <div>
+                                    <label for="installmentPayment" class="block text-sm font-medium text-gray-700 mb-1">每期还款 (¥)</label>
+                                    <input type="number" id="installmentPayment" step="0.01" min="0.01" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-secondary focus:border-transparent" placeholder="自动计算">
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="installmentBorrowDate" class="block text-sm font-medium text-gray-700 mb-1">借款日期</label>
+                                    <input type="date" id="installmentBorrowDate" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-secondary focus:border-transparent">
+                                </div>
+                                <div>
+                                    <label for="installmentNextRepayDate" class="block text-sm font-medium text-gray-700 mb-1">首/下一期还款日期</label>
+                                    <input type="date" id="installmentNextRepayDate" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-secondary focus:border-transparent">
+                                </div>
+                            </div>
+                            <div>
+                                <label for="installmentRemarks" class="block text-sm font-medium text-gray-700 mb-1">备注 (可选)</label>
+                                <input type="text" id="installmentRemarks" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-secondary focus:border-transparent" placeholder="添加备注信息">
+                            </div>
+                            <button type="submit" class="w-full bg-secondary text-white font-medium py-2 px-4 rounded-md hover:bg-secondary/90 transition-custom">
+                                <i class="fa fa-plus mr-1" aria-hidden="true"></i> 添加分期借款
+                            </button>
+                        </form>
+                    </div>
+                    
+                    <!-- 汇总信息 -->
+                    <div class="mb-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div class="bg-purple-50 p-4 rounded-lg">
+                            <h3 class="text-sm font-medium text-gray-600 mb-1">总借款额</h3>
+                            <p id="installmentTotalAmount" class="text-xl font-bold text-secondary">¥0.00</p>
+                        </div>
+                        <div class="bg-green-50 p-4 rounded-lg">
+                            <h3 class="text-sm font-medium text-gray-600 mb-1">已还期数</h3>
+                            <p id="installmentPaidTerms" class="text-xl font-bold text-success">0</p>
+                        </div>
+                        <div class="bg-yellow-50 p-4 rounded-lg">
+                            <h3 class="text-sm font-medium text-gray-600 mb-1">剩余期数</h3>
+                            <p id="installmentRemainingTerms" class="text-xl font-bold text-warning">0</p>
+                        </div>
+                    </div>
+                    
+                    <!-- 借款列表 -->
+                    <div>
+                        <div class="flex justify-between items-center mb-3">
+                            <h3 class="text-lg font-semibold">分期借款列表</h3>
+                            <div class="flex space-x-2">
+                                <select id="installmentSort" class="px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none">
+                                    <option value="date">按日期排序</option>
+                                    <option value="platform">按平台排序</option>
+                                    <option value="amount">按金额排序</option>
+                                    <option value="remainingTerms">按剩余期数排序</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">平台</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">借款金额</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">分期数</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">剩余还款</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">每期还款</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">剩余期数</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="installmentList" class="bg-white divide-y divide-gray-200">
+                                    <!-- 分期借款记录将通过JavaScript动态添加 -->
+                                    <tr class="text-center">
+                                        <td colspan="6" class="px-6 py-10 text-gray-500">暂无分期借款记录</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+        
+        <!-- 图表统计区域 -->
+        <div class="mt-12 bg-white rounded-xl shadow-lg overflow-hidden card-shadow">
+            <div class="p-6">
+                <h2 class="text-xl font-bold mb-6 text-gray-800">债务统计分析</h2>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div>
+                        <h3 class="text-lg font-semibold mb-4">债务构成</h3>
+                        <canvas id="debtCompositionChart" height="300"></canvas>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-semibold mb-4">未来三个月还款计划</h3>
+                        <canvas id="futurePaymentsChart" height="300"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 页脚 -->
+    <footer class="bg-gray-800 text-white py-8 mt-12">
+        <div class="container mx-auto px-4">
+            <div class="flex flex-col md:flex-row justify-between items-center">
+                <div class="mb-4 md:mb-0">
+                    <h3 class="text-lg font-semibold mb-2">个人债务管理系统</h3>
+                    <p class="text-gray-400">所有数据存储在本地浏览器，保护您的隐私安全</p>
+                </div>
+                <div class="flex space-x-4">
+                    <button id="aboutBtn" class="text-gray-400 hover:text-white transition-custom">
+                        <i class="fa fa-info-circle mr-1" aria-hidden="true"></i>关于
+                    </button>
+                    <button id="helpBtn" class="text-gray-400 hover:text-white transition-custom">
+                        <i class="fa fa-question-circle mr-1" aria-hidden="true"></i>帮助
+                    </button>
+                </div>
+            </div>
+            <div class="mt-6 pt-6 border-t border-gray-700 text-center text-gray-500 text-sm">
+                © 2023 个人债务管理系统 | 版本 1.0.0
+            </div>
+        </div>
+    </footer>
+
+    <!-- 编辑借款模态框 -->
+    <div id="editModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg w-full max-w-xl mx-4 shadow-xl transform transition-all">
+            <div class="p-5 border-b border-gray-200 flex justify-between items-center">
+                <h3 id="editModalTitle" class="text-lg font-semibold">编辑借款</h3>
+                <button id="closeEditModal" class="text-gray-400 hover:text-gray-500">
+                    <i class="fa fa-times" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="p-5" id="editModalContent">
+                <!-- 编辑表单将通过JavaScript动态生成 -->
+            </div>
+            <div class="p-5 border-t border-gray-200 flex justify-end space-x-3">
+                <button id="cancelEdit" class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-custom">
+                    取消
+                </button>
+                <button id="saveEdit" class="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 transition-custom">
+                    保存
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 查看分期详情模态框 -->
+    <div id="installmentDetailModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg w-full max-w-2xl mx-4 shadow-xl transform transition-all max-h-[80vh] flex flex-col">
+            <div class="p-5 border-b border-gray-200 flex justify-between items-center">
+                <h3 id="detailModalTitle" class="text-lg font-semibold">分期还款详情</h3>
+                <button id="closeDetailModal" class="text-gray-400 hover:text-gray-500">
+                    <i class="fa fa-times" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="p-5 overflow-y-auto" id="installmentDetailContent">
+                <!-- 分期详情将通过JavaScript动态生成 -->
+            </div>
+            <div class="p-5 border-t border-gray-200 flex justify-end">
+                <button id="closeDetail" class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-custom">
+                    关闭
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 导入数据模态框 -->
+    <div id="importModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg w-full max-w-lg mx-4 shadow-xl transform transition-all">
+            <div class="p-5 border-b border-gray-200 flex justify-between items-center">
+                <h3 class="text-lg font-semibold">导入数据</h3>
+                <button id="closeImportModal" class="text-gray-400 hover:text-gray-500">
+                    <i class="fa fa-times" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="p-5">
+                <p class="mb-4 text-gray-600">请选择要导入的JSON文件，导入后将覆盖现有数据。</p>
+                <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center mb-4 hover:border-primary transition-custom cursor-pointer" id="fileDropArea">
+                    <i class="fa fa-upload text-4xl text-gray-400 mb-3" aria-hidden="true"></i>
+                    <p class="text-gray-500 mb-2">拖放文件到此处，或</p>
+                    <button class="text-primary hover:text-primary/80 font-medium">选择文件</button>
+                    <input type="file" id="importFileInput" accept=".json" class="hidden">
+                </div>
+                <p class="text-sm text-gray-500">支持的格式：JSON</p>
+            </div>
+            <div class="p-5 border-t border-gray-200 flex justify-end space-x-3">
+                <button id="cancelImport" class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-custom">
+                    取消
+                </button>
+                <button id="confirmImport" class="px-4 py-2 bg-secondary text-white rounded-md hover:bg-secondary/90 transition-custom" disabled>
+                    导入
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 系统设置模态框 -->
+<div id="settingsModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-lg w-full max-w-lg mx-4 shadow-xl transform transition-all">
+        <div class="p-5 border-b border-gray-200 flex justify-between items-center">
+            <h3 class="text-lg font-semibold">系统设置</h3>
+            <button id="closeSettingsModal" class="text-gray-400 hover:text-gray-500">
+                <i class="fa fa-times" aria-hidden="true"></i>
+            </button>
+        </div>
+        <div class="p-5">
+
+            
+            <div class="mb-6">
+                <h4 class="text-md font-medium mb-3">主题设置</h4>
+                <div class="flex items-center space-x-4">
+                    <label class="inline-flex items-center">
+                        <input type="radio" name="theme" value="light" checked class="form-radio h-4 w-4 text-primary">
+                        <span class="ml-2 text-sm text-gray-700">浅色主题</span>
+                    </label>
+                    <label class="inline-flex items-center">
+                        <input type="radio" name="theme" value="dark" class="form-radio h-4 w-4 text-primary">
+                        <span class="ml-2 text-sm text-gray-700">深色主题</span>
+                    </label>
+                </div>
+            </div>
+            
+            <div class="mb-6">
+                <h4 class="text-md font-medium mb-3">还款提醒设置</h4>
+                <div class="flex items-center justify-between mb-2">
+                    <label class="inline-flex items-center">
+                        <input type="checkbox" id="reminderEnabled" checked class="form-checkbox h-4 w-4 text-primary rounded">
+                        <span class="ml-2 text-sm text-gray-700">启用还款提醒</span>
+                    </label>
+                </div>
+                <div class="ml-6 mt-2">
+                    <label for="reminderDays" class="block text-sm font-medium text-gray-700 mb-1">提前提醒天数</label>
+                    <input type="number" id="reminderDays" min="1" max="30" value="3" class="w-24 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-secondary focus:border-transparent">
+                </div>
+            </div>
+            
+            <div class="mb-6">
+                <h4 class="text-md font-medium mb-3">货币格式设置</h4>
+                <select id="currencyFormat" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-secondary focus:border-transparent">
+                    <option value="CNY">人民币 (¥)</option>
+                </select>
+            </div>
+        </div>
+        <div class="p-5 border-t border-gray-200 flex justify-end space-x-3">
+            <button id="cancelSettings" class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-custom">
+                取消
+            </button>
+            <button id="saveSettings" class="px-4 py-2 bg-info text-white rounded-md hover:bg-info/90 transition-custom" onclick="saveSettings()">
+                保存
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- 还款记录表板块 -->
+<div class="mt-12 bg-white rounded-xl shadow-lg overflow-hidden card-shadow">
+    <div class="p-6">
+        <h2 class="text-xl font-bold mb-4 text-gray-800">还款记录</h2>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">还款日期</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">平台</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">原始借款</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">还款金额</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">还款类型</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">备注</th>
+                    </tr>
+                </thead>
+                <tbody id="paymentRecordsList" class="bg-white divide-y divide-gray-200">
+                    <tr class="text-center">
+                        <td colspan="6" class="px-6 py-10 text-gray-500">暂无还款记录</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+    <!-- 平台管理模态框 -->
+    <div id="platformManagerModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg w-full max-w-lg mx-4 shadow-xl transform transition-all">
+            <div class="p-5 border-b border-gray-200 flex justify-between items-center">
+                <h3 class="text-lg font-semibold">借款平台管理</h3>
+                <button id="closePlatformManagerModal" class="text-gray-400 hover:text-gray-500">
+                    <i class="fa fa-times" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="p-5">
+                <div class="mb-6">
+                    <h4 class="text-md font-medium mb-3">添加新平台</h4>
+                    <div class="flex space-x-2">
+                        <input type="text" id="newPlatformName" class="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-info focus:border-transparent" placeholder="输入平台名称">
+                        <button id="addPlatformBtn" class="px-4 py-2 bg-info text-white rounded-md hover:bg-info/90 transition-custom">
+                            添加
+                        </button>
+                    </div>
+                </div>
+                <div>
+                    <h4 class="text-md font-medium mb-3">现有平台</h4>
+                    <div id="platformList" class="space-y-2 max-h-60 overflow-y-auto pr-2">
+                        <!-- 平台列表将通过JavaScript动态生成 -->
+                    </div>
+                </div>
+            </div>
+            <div class="p-5 border-t border-gray-200 flex justify-end">
+                <button id="closePlatformManager" class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-custom">
+                    关闭
+                </button>
+            </div>
+        </div>
+    </div>
+
+<!-- JavaScript -->
+    <script>
+    // 等待DOM加载完成后再初始化
+    // 初始化逻辑已移至app.js中
+    // 此处无需额外初始化代码
+
+    // 保存系统设置
+    function saveSettings() {
+            // 保存主题设置
+            const theme = document.querySelector('input[name="theme"]:checked').value;
+            debtData.theme = theme;
+            applyTheme(theme);
+
+            // 保存还款提醒设置
+            const reminderEnabled = document.getElementById('reminderEnabled').checked;
+            const reminderDays = parseInt(document.getElementById('reminderDays').value);
+            debtData.reminderEnabled = reminderEnabled;
+            debtData.reminderDays = reminderDays;
+
+            // 保存货币格式设置
+            const currencyFormat = document.getElementById('currencyFormat').value;
+            debtData.currencyFormat = currencyFormat;
+
+            // 保存数据
+            saveData(debtData);
+            document.getElementById('settingsModal').classList.add('hidden');
+            alert('设置保存成功');
+        }
+
+        // 应用主题样式 - 兼容app.js中的调用
+        window.applyTheme = function(theme) {
+            if (theme === 'dark') {
+                document.body.classList.add('dark-theme');
+                document.body.classList.remove('light-theme');
+            } else {
+                document.body.classList.add('light-theme');
+                document.body.classList.remove('dark-theme');
+            }
+        };
+
+    // 动态加载测试脚本
+    function loadScript(src, callback) {
+        const script = document.createElement('script');
+        script.src = src;
+        script.onload = function() {
+            console.log('成功加载脚本:', src);
+            if (callback) callback();
+        };
+        script.onerror = function() {
+            console.error('加载脚本失败:', src);
+        };
+        document.head.appendChild(script);
+    }
+
+    // 加载测试脚本 (修正路径)
+    loadScript('../test.js', function() {
+        loadScript('../detailed_test.js');
+    });
+</script>
+
+<!-- 测试按钮 -->
+<div style="position: fixed; bottom: 20px; right: 20px; z-index: 1000;">
+    <button id="runTestsBtn" style="background-color: #4CAF50; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;">
+        运行单元测试
+    </button>
+</div>
+
+<script>
+    // 绑定测试按钮点击事件
+    document.getElementById('runTestsBtn').addEventListener('click', function() {
+        runTests();
+    });
+</script>
+</body>
+</html>
