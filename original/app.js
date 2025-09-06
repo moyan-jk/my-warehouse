@@ -1,3 +1,32 @@
+// 债务管理应用 - 主脚本文件
+// 包含核心功能实现、数据管理和UI交互
+
+// 代码目录
+// 1. 数据存储和管理 (约行1-100)
+// 2. 平台管理功能 (约行101-200)
+// 3. 辅助函数 (约行201-400)
+//    - 日期处理函数
+//    - 表单验证函数
+//    - 金额格式化函数
+//    - 还款计算函数
+// 4. 本月借下月还款功能 (约行401-700)
+//    - CRUD操作
+//    - 还款处理
+//    - 列表渲染
+// 5. 分期还款功能 (约行701-1200)
+//    - CRUD操作
+//    - 还款处理
+//    - 列表渲染和详情展示
+// 6. 汇总和统计功能 (约行1201-1300)
+//    - updateSummary函数
+//    - checkReminders函数
+// 7. 图表功能 (约行1301-1500)
+//    - 债务构成图表
+//    - 未来还款图表
+// 8. 数据导入导出功能 (约行1501-1700)
+// 9. 模态框功能 (约行1701-2000)
+// 10. 应用初始化和事件绑定 (约行2001-2287)
+
 // 数据存储和管理
 const STORAGE_KEY = 'debtRecords';
 const DEFAULT_PLATFORMS = ['花呗', '信用卡', '美团月付', '美团借钱', '放心借', '借呗', '其他'];
@@ -17,6 +46,9 @@ function initData() {
             platforms: DEFAULT_PLATFORMS,
             minPaymentRate: DEFAULT_MIN_PAYMENT_RATE
         };
+
+
+
         localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultData));
         return defaultData;
     }
@@ -68,7 +100,9 @@ function saveData(data) {
     }
 }
 
+// ========================================================
 // 平台管理功能
+// ========================================================
 function addPlatform(name) {
     // 验证平台名称不为空且不重复
     if (!name || name.trim() === '') {
@@ -152,6 +186,9 @@ let debtData = initData();
 // 暴露数据到全局作用域，供测试使用
 window.debtData = debtData;
 
+// ========================================================
+// 辅助函数
+// ========================================================
 // 辅助函数：验证日期是否有效
 function isValidDate(dateString) {
     const date = new Date(dateString);
@@ -287,7 +324,9 @@ function isOverdue(date) {
     return targetDate < today;
 }
 
+// ========================================================
 // 本月借下月还款功能
+// ========================================================
 // 添加本月借下月还款
 function addNextMonthLoan(platform, amount, borrowDate, repayDate, rate, minRate, remarks = '') {
     // 参数验证
@@ -380,7 +419,7 @@ function markNextMonthLoanAsPaid(id) {
         updateSummary();
         updateCharts();
         // 添加还款记录
-        addPaymentRecord(id, 'nextMonth', loan.amount, 'full', '全额还款');
+        addPaymentRecord(id, 'nextMonth', loan.amount, 'full', loan.minPaymentRate || debtData.minPaymentRate, '全额还款');
     }
 }
 
@@ -394,84 +433,54 @@ function processMinimumPayment(id, amount) {
         // 使用贷款特定的最低还款比例，如果没有则使用全局设置
         const minPaymentRate = loan.minPaymentRate || debtData.minPaymentRate;
         const minPayment = Math.max(10, Math.ceil(loan.amount * minPaymentRate)); // 最低10元
+        // 确保金额为整数
+        amount = Math.floor(parseFloat(amount));
         if (amount < minPayment) {
             alert(`最低还款额为 ¥${minPayment}`);
             return false;
         }
         
         // 计算剩余未还金额
-        const remainingAmount = loan.amount - amount;
+        const remainingAmount = Math.round((loan.amount - amount) * 100) / 100;
         
-        // 如果是第一次部分还款
-        if (loan.status !== 'partial') {
-            loan.status = 'partial';
-            loan.partialAmount = 0;
-            loan.lastPaymentDate = new Date().toISOString();
-        } else {
-            // 计算上次还款到现在的利息
-            const lastPaymentDate = new Date(loan.lastPaymentDate);
+        // 标记原贷款为已部分还款
+        loan.status = 'partial';
+        loan.partialAmount = amount;
+        loan.lastPaymentDate = new Date().toISOString();
+        
+        // 添加还款记录
+        const paymentType = amount === minPayment ? 'minimum' : 'custom';
+        addPaymentRecord(id, 'nextMonth', amount, paymentType, loan.minPaymentRate || debtData.minPaymentRate, paymentType === 'minimum' ? '最低还款' : '自定义还款');
+        
+        // 计算利息并更新原借款记录
+        if (remainingAmount > 0) {
             const today = new Date();
-            const days = Math.ceil((today - lastPaymentDate) / (24 * 60 * 60 * 1000));
-            
-            // 使用贷款特定的利率，如果没有则使用0
-            const rate = loan.rate || 0;
-            if (rate > 0 && days > 0) {
-                const interest = calculateInterest(remainingAmount, rate / 100, days);
-                loan.amount = parseFloat((loan.amount + interest).toFixed(2)); // 确保金额精确到分
-                console.log(`计算利息: ${interest}, 剩余本金: ${remainingAmount}, 天数: ${days}, 利率: ${rate}%`);
-            }
-            loan.lastPaymentDate = new Date().toISOString();
-        }
-        
-        // 更新部分还款金额
-        loan.partialAmount += amount;
-        
-        // 如果全部还清
-        if (loan.partialAmount >= loan.amount) {
+            // 正确计算下个月的还款日期，避免月底问题
+            const repayDate = new Date(today.getFullYear(), today.getMonth() + 1, Math.min(today.getDate(), new Date(today.getFullYear(), today.getMonth() + 2, 0).getDate()));
+
+            // 使用实际天数计算利息（从今日到下个月还款日的实际天数）
+            const timeDiff = repayDate - today;
+            const daysInMonth = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+            const rate = loan.rate || 18; // 使用贷款特定的利率，如果没有则使用18%
+            const interest = calculateInterest(remainingAmount, rate / 100, daysInMonth);
+            const newAmount = Math.round(remainingAmount + interest); // 确保新借款金额为整数
+
+            // 更新原借款记录
+            loan.amount = newAmount;
+            loan.borrowDate = formatDate(today);
+            loan.repayDate = formatDate(repayDate);
+            loan.remarks = `最低还款后剩余金额产生利息: ¥${interest.toFixed(2)}`;
+            loan.status = 'unpaid'; // 重置状态为未还，以便下个月继续还款
+        } else {
+            // 如果剩余金额为0，则标记为已还清
             loan.status = 'paid';
-            loan.partialAmount = loan.amount;
-            saveData(debtData);
-            renderNextMonthLoans();
-            updateSummary();
-            updateCharts();
-            addPaymentRecord(id, 'nextMonth', loan.amount, 'full', '全额还款');
-            return true;
+            loan.remarks = '已通过最低还款方式还清';
         }
-        
+
         saveData(debtData);
         renderNextMonthLoans();
         updateSummary();
         updateCharts();
-        
-        // 添加还款记录
-        const paymentType = amount === minPayment ? 'minimum' : 'custom';
-        addPaymentRecord(id, 'nextMonth', amount, paymentType, paymentType === 'minimum' ? '最低还款' : '自定义还款');
-        
-        // 计算利息并生成新的借款记录（下个月）
-        const today = new Date();
-        const repayDate = new Date();
-        repayDate.setMonth(today.getMonth() + 1);
-        
-        // 计算利息天数（假设30天）
-        const rate = loan.rate || 18; // 使用贷款特定的利率，如果没有则使用18%
-        const interest = calculateInterest(remainingAmount, rate / 100, 30);
-        const newAmount = parseFloat((remainingAmount + interest).toFixed(2)); // 确保新借款金额精确到分
-        
-        // 创建新的借款记录
-        const newLoan = {
-            id: Date.now().toString(),
-            platform: loan.platform,
-            amount: newAmount,
-            borrowDate: formatDate(today),
-            repayDate: formatDate(repayDate),
-            status: 'unpaid',
-            remarks: `上月未还金额产生利息: ¥${interest.toFixed(2)}`,
-            createdAt: new Date().toISOString()
-        };
-        
-        debtData.nextMonthLoans.push(newLoan);
-        saveData(debtData);
-        renderNextMonthLoans();
         
         return true;
     }
@@ -506,17 +515,18 @@ function getMinimumPayment(amount) {
 function calculateInterest(principal, rate, days) {
     // 简单利息计算: 本金 * 日利率 * 天数
     const dailyRate = rate / 365;
-    return parseFloat((principal * dailyRate * days).toFixed(2)); // 确保利息精确到分
+    return Math.round(principal * dailyRate * days); // 确保利息为整数
 }
 
 // 添加还款记录
-function addPaymentRecord(loanId, loanType, amount, paymentType, remarks = '') {
+function addPaymentRecord(loanId, loanType, amount, paymentType, minPaymentRate = null, remarks = '') {
     const record = {
         id: Date.now().toString(),
         loanId,
         loanType,
         amount,
         paymentType,
+        minPaymentRate,
         date: formatDate(new Date()),
         remarks,
         createdAt: new Date().toISOString()
@@ -596,6 +606,9 @@ function renderPaymentRecords() {
                     <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${paymentTypeClass}">
                         ${paymentTypeText}
                     </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="text-sm text-gray-500">${record.minPaymentRate ? `${(record.minPaymentRate * 100).toFixed(0)}%` : 'N/A'}</div>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     <div>${record.remarks || '-'}</div>
@@ -713,9 +726,11 @@ function renderNextMonthLoans() {
                             <button onclick="markNextMonthLoanAsPaid('${loan.id}')" class="text-success hover:text-success/80" title="标记为已还">
                                 <i class="fa fa-check" aria-hidden="true"></i>
                             </button>
+                            ${loan.status === 'unpaid' ? `
                             <button onclick="showMinimumPaymentModal('${loan.id}')" class="text-warning hover:text-warning/80" title="最低还款">
                                 <i class="fa fa-credit-card" aria-hidden="true"></i>
                             </button>
+                            ` : ''}
                         ` : ''}
                         <button onclick="editNextMonthLoanModal('${loan.id}')" class="text-primary hover:text-primary/80" title="编辑">
                             <i class="fa fa-pencil" aria-hidden="true"></i>
@@ -744,8 +759,9 @@ function renderNextMonthLoans() {
     
     listElement.innerHTML = html;
 }
-
+// ========================================================
 // 分期还款功能
+// ========================================================
 
 // 添加分期还款
 function addInstallmentLoan(platform, amount, terms, rate, monthlyPayment, borrowDate, nextRepayDate, remarks = '') {
@@ -764,22 +780,33 @@ const payment = parseFloat((Math.abs(parseFloat(monthlyPayment)) || calculateMon
     // 初始化分期数组
     const installments = [];
     const today = new Date();
+    const borrowDateObj = new Date(borrowDate);
+    const firstRepayDate = nextRepayDate ? new Date(nextRepayDate) : new Date(borrowDate);
+    
+    // 计算首次还款日期与当前日期的月数差
+    const monthsDifference = today.getMonth() - firstRepayDate.getMonth() +
+        (today.getFullYear() - firstRepayDate.getFullYear()) * 12;
+    
+    // 计算每月利息
+    const monthlyInterestRate = rateValue / 100 / 12;
+    let remainingPrincipal = principal;
+    let totalInterest = 0;
     
     for (let i = 1; i <= termCount; i++) {
         // 计算每期的还款日
-        let currentDate;
-        
-        if (i === 1) {
-            // 第一期使用首次还款日期
-            currentDate = nextRepayDate ? new Date(nextRepayDate) : new Date(borrowDate);
-        } else {
-            // 从第一期的日期开始计算
-            currentDate = new Date(installments[0].date);
-            currentDate.setMonth(currentDate.getMonth() + (i - 1));
-        }
+        let currentDate = new Date(firstRepayDate);
+        currentDate.setMonth(firstRepayDate.getMonth() + (i - 1));
         
         // 格式化日期
         const formattedDate = formatDate(currentDate);
+        
+        // 计算本期利息
+        const interest = parseFloat((remainingPrincipal * monthlyInterestRate).toFixed(2));
+        totalInterest += interest;
+        
+        // 计算本期本金
+        const principalPayment = parseFloat((payment - interest).toFixed(2));
+        remainingPrincipal = parseFloat((remainingPrincipal - principalPayment).toFixed(2));
         
         // 检查是否已还款（根据当前日期）
         let status = 'unpaid';
@@ -793,9 +820,24 @@ const payment = parseFloat((Math.abs(parseFloat(monthlyPayment)) || calculateMon
             term: i,
             date: formattedDate,
             amount: payment,
+            interest: interest,
+            principal: principalPayment,
             status: status
         });
     }
+    
+    // 计算已还款分期的总利息
+    const paidInterest = installments
+        .filter(inst => inst.status === 'paid')
+        .reduce((sum, inst) => sum + inst.interest, 0);
+    
+    // 计算剩余本金
+    const remainingPrincipalAfterPaid = parseFloat(
+        installments
+            .filter(inst => inst.status === 'paid')
+            .reduce((sum, inst) => sum - inst.principal, principal)
+            .toFixed(2)
+    );
     
     const newLoan = {
         id: Date.now().toString(),
@@ -807,6 +849,9 @@ const payment = parseFloat((Math.abs(parseFloat(monthlyPayment)) || calculateMon
         borrowDate,
         nextRepayDate: installments.find(inst => inst.status === 'unpaid')?.date || '',
         installments,
+        totalInterest: parseFloat(totalInterest.toFixed(2)),
+        paidInterest: parseFloat(paidInterest.toFixed(2)),
+        remainingPrincipal: remainingPrincipalAfterPaid,
         remarks,
         createdAt: new Date().toISOString()
     };
@@ -955,7 +1000,7 @@ function renderInstallmentLoans() {
     if (loans.length === 0) {
         listElement.innerHTML = `
             <tr class="text-center">
-                <td colspan="6" class="px-6 py-10 text-gray-500">暂无分期借款记录</td>
+                <td colspan="8" class="px-6 py-10 text-gray-500">暂无分期借款记录</td>
             </tr>
         `;
         return;
@@ -991,6 +1036,14 @@ function renderInstallmentLoans() {
                     <div class="text-xs text-gray-500">剩余还款</div>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="text-sm text-gray-900">¥${formatAmount(loan.totalInterest || 0)}</div>
+                    <div class="text-xs text-gray-500">总利息</div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="text-sm text-gray-900">¥${formatAmount(loan.paidInterest || 0)}</div>
+                    <div class="text-xs text-gray-500">已还利息</div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
                     <div class="text-sm text-gray-900">¥${formatAmount(loan.monthlyPayment)}</div>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
@@ -1018,7 +1071,7 @@ function renderInstallmentLoans() {
     if (loans.length > 10) {
         html += `
             <tr class="text-center bg-gray-50">
-                <td colspan="7" class="px-6 py-3">
+                <td colspan="9" class="px-6 py-3">
                     <button onclick="toggleInstallmentList()" class="text-primary hover:text-primary/80 font-medium">
                         ${installmentListExpanded ? '收起' : `显示更多 (${loans.length - 10})`}
                     </button>
@@ -1086,6 +1139,18 @@ function showInstallmentDetails(loanId) {
                     <p class="text-sm text-gray-500">总还款额</p>
                     <p class="text-lg font-semibold text-primary">¥${formatAmount(totalAmount)}</p>
                 </div>
+                <div class="bg-green-50 p-3 rounded-lg">
+                    <p class="text-sm text-gray-500">总利息</p>
+                    <p class="text-lg font-semibold text-green-600">¥${formatAmount(loan.totalInterest || 0)}</p>
+                </div>
+                <div class="bg-teal-50 p-3 rounded-lg">
+                    <p class="text-sm text-gray-500">已还利息</p>
+                    <p class="text-lg font-semibold text-teal-600">¥${formatAmount(loan.paidInterest || 0)}</p>
+                </div>
+                <div class="bg-indigo-50 p-3 rounded-lg">
+                    <p class="text-sm text-gray-500">未还利息</p>
+                    <p class="text-lg font-semibold text-indigo-600">¥${formatAmount((loan.totalInterest || 0) - (loan.paidInterest || 0))}</p>
+                </div>
             </div>
         </div>
         
@@ -1097,6 +1162,7 @@ function showInstallmentDetails(loanId) {
                         <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">期数</th>
                         <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">还款日期</th>
                         <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">还款金额</th>
+                        <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">利息</th>
                         <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">状态</th>
                         <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
                     </tr>
@@ -1117,6 +1183,7 @@ function showInstallmentDetails(loanId) {
                                 <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">第${inst.term}期</td>
                                 <td class="px-4 py-3 whitespace-nowrap text-sm ${dateClass}">${inst.date}</td>
                                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">¥${formatAmount(inst.amount)}</td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">¥${formatAmount(inst.interest || 0)}</td>
                                 <td class="px-4 py-3 whitespace-nowrap">
                                     <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusClass}">
                                         ${statusText}
@@ -1140,6 +1207,9 @@ function showInstallmentDetails(loanId) {
     modal.classList.remove('hidden');
 }
 
+// ========================================================
+// 汇总统计功能
+// ========================================================
 // 汇总信息更新函数
 function updateSummary() {
     // 本月借下月还款统计
@@ -1154,19 +1224,19 @@ function updateSummary() {
     
     // 分期还款统计
     const installmentTotalAmount = debtData.installmentLoans.reduce((sum, loan) => sum + loan.amount, 0);
-    const installmentPaidTerms = debtData.installmentLoans
+    const installmentPaidAmount = debtData.installmentLoans
         .flatMap(loan => loan.installments)
         .filter(inst => inst.status === 'paid')
-        .length;
-    const installmentRemainingTerms = debtData.installmentLoans
-        .flatMap(loan => loan.installments)
-        .filter(inst => inst.status === 'unpaid')
-        .length;
+        .reduce((sum, inst) => sum + inst.amount, 0);
     const installmentRemainingAmount = debtData.installmentLoans
         .flatMap(loan => loan.installments)
         .filter(inst => inst.status === 'unpaid')
         .reduce((sum, inst) => sum + inst.amount, 0);
-        
+
+    // 计算所有分期借款的利息累计
+    const totalInterest = debtData.installmentLoans
+        .reduce((sum, loan) => sum + (loan.totalInterest || 0), 0);
+
         // 更新本月借下月还款汇总
     document.getElementById('nextMonthTotalAmount').textContent = `¥${formatAmount(nextMonthTotalAmount)}`;
     document.getElementById('nextMonthPaidAmount').textContent = `¥${formatAmount(nextMonthPaidAmount + nextMonthPartialAmount)}`;
@@ -1174,8 +1244,8 @@ function updateSummary() {
     
     // 更新分期还款汇总
     document.getElementById('installmentTotalAmount').textContent = `¥${formatAmount(installmentTotalAmount)}`;
-    document.getElementById('installmentPaidTerms').textContent = installmentPaidTerms;
-    document.getElementById('installmentRemainingTerms').textContent = installmentRemainingTerms;
+    document.getElementById('installmentPaidAmount').textContent = `¥${formatAmount(installmentPaidAmount)}`;
+    document.getElementById('totalInterest').textContent = `¥${formatAmount(totalInterest)}`;
     
     // 更新顶部汇总栏
     document.getElementById('nextMonthTotal').textContent = `¥${formatAmount(nextMonthRemainingAmount)}`;
@@ -1237,7 +1307,9 @@ function checkReminders() {
     }
 }
 
+// ========================================================
 // 图表功能
+// ========================================================
 let debtCompositionChart, futurePaymentsChart;
 
 function updateCharts() {
@@ -1439,6 +1511,9 @@ function exportData() {
     URL.revokeObjectURL(url);
 }
 
+// ========================================================
+// 数据导入导出功能
+// ========================================================
 // 导入数据
 function importData(file) {
     console.log('开始导入数据:', file);
@@ -1536,7 +1611,9 @@ function resetData() {
     }
 }
 
+// ========================================================
 // 模态框功能
+// ========================================================
 
 // 编辑本月借下月还款模态框
 function editNextMonthLoanModal(id) {
@@ -1744,7 +1821,7 @@ function showMinimumPaymentModal(id) {
             </div>
             <div>
                 <label for="minimumAmount" class="block text-sm font-medium text-gray-700 mb-1">最低还款金额 (¥)</label>
-                <input type="number" id="minimumAmount" name="minimumAmount" step="0.01" min="0.01" max="${loan.amount}" value="${(loan.amount * (loan.minPaymentRate || debtData.minPaymentRate)).toFixed(2)}" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-warning focus:border-transparent">
+                <input type="number" id="minimumAmount" name="minimumAmount" step="1" min="0.01" max="${loan.amount}" value="${Math.ceil(loan.amount * (loan.minPaymentRate || debtData.minPaymentRate))}" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-warning focus:border-transparent">
                 <p class="mt-1 text-xs text-gray-500">最低还款后，剩余金额将自动计算利息并转入下期账单</p>
             </div>
         </form>
@@ -1842,6 +1919,10 @@ function initApp() {
                 label: '还款日期'
             }
         };
+
+// ========================================================
+// 初始化和事件绑定功能
+// ========================================================
 
         // 执行表单验证
         const errors = validateForm(form, rules);
@@ -2156,6 +2237,10 @@ window.updatePlatformDropdowns = updatePlatformDropdowns;
 window.renderPlatformList = renderPlatformList;
 window.showPlatformManagerModal = showPlatformManagerModal;
 window.hidePlatformManagerModal = hidePlatformManagerModal;
+
+// ========================================================
+// 平台管理模态框功能
+// ========================================================
 
 // 平台管理模态框功能
 function showPlatformManagerModal() {

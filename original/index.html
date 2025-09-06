@@ -327,13 +327,13 @@
                             <h3 class="text-sm font-medium text-gray-600 mb-1">总借款额</h3>
                             <p id="installmentTotalAmount" class="text-xl font-bold text-secondary">¥0.00</p>
                         </div>
-                        <div class="bg-green-50 p-4 rounded-lg">
-                            <h3 class="text-sm font-medium text-gray-600 mb-1">已还期数</h3>
-                            <p id="installmentPaidTerms" class="text-xl font-bold text-success">0</p>
+                        <div class="bg-blue-50 p-4 rounded-lg">
+                            <h3 class="text-sm font-medium text-gray-600 mb-1">已还款金额</h3>
+                            <p id="installmentPaidAmount" class="text-xl font-bold text-primary">¥0.00</p>
                         </div>
-                        <div class="bg-yellow-50 p-4 rounded-lg">
-                            <h3 class="text-sm font-medium text-gray-600 mb-1">剩余期数</h3>
-                            <p id="installmentRemainingTerms" class="text-xl font-bold text-warning">0</p>
+                        <div class="bg-purple-50 p-4 rounded-lg">
+                            <h3 class="text-sm font-medium text-gray-600 mb-1">利息累计</h3>
+                            <p id="totalInterest" class="text-xl font-bold text-purple-600">¥0.00</p>
                         </div>
                     </div>
                     
@@ -356,9 +356,11 @@
                                 <thead class="bg-gray-50">
                                     <tr>
                                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">平台</th>
-                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">借款金额</th>
-                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">分期数</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">金额</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">期数</th>
                                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">剩余还款</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">总利息</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">已还利息</th>
                                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">每期还款</th>
                                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">剩余期数</th>
                                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
@@ -562,6 +564,7 @@
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">原始借款</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">还款金额</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">还款类型</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">最低还款比例</th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">备注</th>
                     </tr>
                 </thead>
