@@ -1,6 +1,23 @@
 {
-  "version": "1.0.1",
+  "version": "1.0.3",
   "updateLog": [
+    {
+      "version": "1.0.3",
+      "date": "2025-09-07",
+      "changes": [
+        "整理项目文档，分类存放至docs目录下",
+        "修复版本更新脚本路径问题"
+      ]
+    },
+    {
+      "version": "1.0.2",
+      "date": "2025-09-07",
+      "changes": [
+        "整理项目文档，分类存放至docs目录下",
+        "创建docs目录结构，包括user_guide、dev_guide、version_control、git_config子目录",
+        "创建docs/README.md文档索引"
+      ]
+    },
     {
       "version": "1.0.1",
       "date": "2025-09-06",
